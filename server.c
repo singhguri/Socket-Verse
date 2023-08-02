@@ -15,12 +15,13 @@
 #define PORT 8080
 #define MIRROR_PORT 7001
 
+// redirect to the mirror
 void redirect_to_mirror(int cli_fd)
 {
-  char redirect_msg[BUFSIZE];
-  snprintf(redirect_msg, BUFSIZE, "%d\n", MIRROR_PORT);
-  send(cli_fd, redirect_msg, strlen(redirect_msg), 0);
-  close(cli_fd);
+	char redirect_msg[BUFSIZE];
+	snprintf(redirect_msg, BUFSIZE, "%d\n", MIRROR_PORT);
+	send(cli_fd, redirect_msg, strlen(redirect_msg), 0);
+	close(cli_fd);
 }
 
 void processclient(int skt_fd)
@@ -73,12 +74,16 @@ void processclient(int skt_fd)
 
 int main(int argc, char const *argv[])
 {
+	
+	
+
   int serv_fd, new_skt;
   struct sockaddr_in serv_addr, cli_addr;
   int opt = 1;
   int addrlen = sizeof(serv_addr);
-  int active_clients = 0;
+  int no_of_clients = 1;
 
+	// Create Raw socket
   // Create socket file descriptor
   if ((serv_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
   {
@@ -86,74 +91,92 @@ int main(int argc, char const *argv[])
     exit(EXIT_FAILURE);
   }
 
+	
+	////////////////////// TODO: check this ////////////////////////
+	
   // Attach socket to the port 8080
   if (setsockopt(serv_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)) < 0)
   {
     perror("setsockopt");
     exit(EXIT_FAILURE);
   }
+  
+  ///////////////////////////////////////////////////////////
+  
 
-  memset(&serv_addr, 0, sizeof(serv_addr));
-  serv_addr.sin_family = AF_INET;
-  serv_addr.sin_addr.s_addr = INADDR_ANY;
-  serv_addr.sin_port = htons(PORT);
+	/// Attributes for binding socket with IP and PORT
+  	memset(&serv_addr, 0, sizeof(serv_addr));
+  	serv_addr.sin_family = AF_INET;
+  	serv_addr.sin_addr.s_addr = INADDR_ANY;
+  	serv_addr.sin_port = htons(PORT);
 
-  // Bind socket to the PORT
-  if (bind(serv_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-  {
-    perror("bind failed");
-    exit(EXIT_FAILURE);
-  }
+	// Bind socket to the PORT
+	if (bind(serv_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+	{
+		perror("bind failed");
+		exit(EXIT_FAILURE);
+	}
 
-  if (listen(serv_fd, 3) < 0)
-  {
-    perror("listen");
-    exit(EXIT_FAILURE);
-  }
 
-  printf("Waiting for client...\n");
-  while (1)
-  {
-    if ((new_skt = accept(serv_fd, (struct sockaddr *)&serv_addr, (socklen_t *)&addrlen)) < 0)
-    {
-      perror("accept");
-      exit(EXIT_FAILURE);
-    }
+	// listen to the socket
+	// queue of size 150 
+	if (listen(serv_fd, 150) < 0)
+	{
+		perror("listen");
+		exit(EXIT_FAILURE);
+	}
 
-    printf("New client is connected. Forking child process...\n");
-    // load balancing from server to mirror
-    if (active_clients <= 6 || (active_clients <= 12 && active_clients % 2 == 1))
-    {
-      pid_t pid = fork();
-      if (pid == 0)
-      {
-        // Child process
-        close(serv_fd);
-        processclient(new_skt);
-      }
-      else if (pid == -1)
-      {
-        // error
-        perror("fork");
-        exit(EXIT_FAILURE);
-      }
-      else
-      {
-        // Parent process
-        close(new_skt);
-        while (waitpid(-1, NULL, WNOHANG) > 0)
-          ; // Clean up zombie processes
-      }
-    }
-    else
-    {
-      // redirecting to mirror server
-      printf("Redirecting to mirror\n");
-      redirect_to_mirror(new_skt);
-    }
-    // counter for no of connections
-    active_clients++;
-  }
 
-  exit(EXIT_SUCCESS);
+	// waitin for client
+	printf("Waiting for client...\n");
+	while (1)
+	{
+		if ((new_skt = accept(serv_fd, (struct sockaddr *)&serv_addr, (socklen_t *)&addrlen)) < 0)
+		{
+			perror("accept");
+			exit(EXIT_FAILURE);
+		}
+		
+		printf("New client is connected. Forking child process...\n");
+		
+		// load balancing from server to mirror
+		// if active clients less than =6 or is an odd no. after 12 connections
+		// to be handled by server
+		if (no_of_clients <= 6 || (no_of_clients > 12 && no_of_clients % 2 == 1))
+		{
+			pid_t pid = fork();
+			if (pid == 0)
+			{
+				// Child process
+				close(serv_fd);
+				processclient(new_skt);
+			}
+			else if (pid == -1)
+			{
+				// error
+				perror("fork");
+				exit(EXIT_FAILURE);
+			}
+			else
+			{
+				// Parent process
+				close(new_skt);
+				
+				///////// TODO: check this //////////////
+				while (waitpid(-1, NULL, WNOHANG) > 0)
+				  ; // Clean up zombie processes
+			}
+		}
+		else
+		{
+			// redirecting to mirror server
+			printf("Redirecting to mirror\n");
+			redirect_to_mirror(new_skt);
+		}
+		
+		// increase counter for no of connections
+		no_of_clients++;
+	}
+
+	exit(EXIT_SUCCESS);
 }
