@@ -10,11 +10,13 @@
 #include <time.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <stdbool.h>
 
 #define BUFSIZE 1024
 #define _XOPEN_SOURCE 500
 #define PORT 8080
 #define MIRROR_PORT 7001
+#define BACKLOG 200
 
 struct
 {
@@ -28,10 +30,11 @@ char month[4];
 
 void file_search(char *base_path, char *filename)
 {
+	char command_buf[BUFSIZE];
 
 	// Searching for file in the root directory
-	char command_buf[BUFSIZE];
-	sprintf(command_buf, "find %s -maxdepth 1 -name %s -printf \"%%s,%%Tc\n\"", base_path, filename);
+	sprintf(command_buf, "find %s -type f -wholename $(find %s -type f -name %s | awk -F/ '{ print NF-1, $0 }' | sort -n | awk '{$1=\"\"; print $0}'|head -1) -printf \"%%s,%%Tc\n\"", base_path, base_path, filename);
+
 	FILE *fp = popen(command_buf, "r");
 	char line[BUFSIZE];
 
@@ -46,29 +49,73 @@ void file_search(char *base_path, char *filename)
 			sprintf(date, "%s %d, %d %d:%d:%d\n", month, day, year, hour, min, sec);
 		File_info.file_created_date = strdup(date);
 	}
+	// if File not found
 	else
-	{
-		// Search for the file in all subdirectories
-		sprintf(command_buf, "find %s -name %s -printf \"%%s,%%Tc\n\"", base_path, filename);
-		fp = popen(command_buf, "r");
+		File_info.file_size = -1;
 
-		// if File found in subdirectory
-		if (fgets(line, BUFSIZE, fp) != NULL)
-		{
-			File_info.file_name = strdup(filename);
-			File_info.file_size = atoi(strtok(line, ","));
-
-			char *date = strtok(NULL, ",");
-			if (sscanf(date, "%*s %s %d %d:%d:%d %d", month, &day, &hour, &min, &sec, &year) == 6)
-				sprintf(date, "%s %d, %d %d:%d:%d\n", month, day, year, hour, min, sec);
-			File_info.file_created_date = strdup(date);
-		}
-
-		// if File not found
-		else
-			File_info.file_size = -1;
-	}
 	pclose(fp);
+}
+
+int get_files(char *base_path, char *file1, char *file2, char *file3, char *file4)
+{
+	int status = 0;
+	char command_buf[BUFSIZE];
+
+	sprintf(command_buf, "find %s -type f \\( -iname \"%s\" -o -iname \"%s\" -o -iname \"%s\" -o -iname \"%s\" \\) -print0 | xargs -0 tar -czf temp.tar.gz 2>/dev/null",
+					base_path, file1, file2, file3, file4);
+
+	status = system(command_buf);
+
+	return status;
+}
+
+bool get_files_matching_size(char *base_path, int size1, int size2)
+{
+	char command_buf[BUFSIZE];
+	sprintf(command_buf, "find %s -type f -size +%dk -size -%dk -print0 | xargs -0 tar -czf temp.tar.gz",
+					base_path, size1, size2);
+	int status = system(command_buf);
+
+	if (status == 0)
+		return true;
+
+	return false;
+}
+
+bool get_files_matching_date(char *base_path, char *date1, char *date2)
+{
+	char command_buf[BUFSIZE];
+	sprintf(command_buf, "find %s -type f -newermt \"%s\" ! -newermt \"%s\" -print0 | xargs -0 tar -czf temp.tar.gz",
+					base_path, date1_str, date2_str);
+	int status = system(command_buf);
+
+	if (status == 0)
+		return true;
+
+	return false;
+}
+
+bool get_files_matching_ext(char *base_path, char *ext1, char *ext2, char *ext3, char *ext4)
+{
+	char command_buf[BUFSIZE];
+	sprintf(command_buf, "find %s -type f \\( ", base_path);
+	if (ext1 != NULL)
+		sprintf(command_buf + strlen(command_buf), "-iname \"*.%s\" -o ", ext1);
+	if (ext2 != NULL)
+		sprintf(command_buf + strlen(command_buf), "-iname \"*.%s\" -o ", ext2);
+	if (ext3 != NULL)
+		sprintf(command_buf + strlen(command_buf), "-iname \"*.%s\" -o ", ext3);
+	if (ext4 != NULL)
+		sprintf(command_buf + strlen(command_buf), "-iname \"*.%s\" -o ", ext4);
+
+	sprintf(command_buf + strlen(command_buf), "-false \\) -print0 | xargs -0 tar -czf temp.tar.gz");
+
+	int status = system(command_buf);
+
+	if (status == 0)
+		return true;
+
+	return false;
 }
 
 // redirect to the mirror
@@ -86,8 +133,6 @@ void processclient(int skt_fd)
 	char cmd[BUFSIZE] = {0};
 	char response[BUFSIZE * 2] = {0};
 	char gf[BUFSIZE] = {0};
-
-	printf("New client connected. Client id: %d...\n", getpid());
 
 	while (1)
 	{
@@ -109,12 +154,26 @@ void processclient(int skt_fd)
 		else if (strcmp(token, "fgets") == 0)
 		{
 			// execcution of fgets command
-			char *filename = strtok(NULL, " ");
-			if (filename == NULL)
+			char *file1 = strtok(NULL, " ");
+			if (file1 == NULL)
 				sprintf(response, "The syntax is Invalid. Please try again.\n");
 			else
 			{
 				// fgets logic
+				char *file2 = strtok(NULL, " ");
+				char *file3 = strtok(NULL, " ");
+				char *file4 = strtok(NULL, " ");
+
+				int status = get_files("$HOME", file1, file2, file3, file4);
+
+				// check if the files were found
+				if (status == 0)
+				{
+					// return temp.tar.gz file
+					sprintf(response, "tar file");
+				}
+				else
+					sprintf(response, "No file found.\n");
 			}
 		}
 		else if (strcmp(token, "filesrch") == 0)
@@ -127,13 +186,72 @@ void processclient(int skt_fd)
 				// fsearch logic
 				File_info.file_size = 0;
 				// serach file by file name in $HOME directory
-				file_search("$HOME", filename);
+				file_search("$HOME", filename, NULL, 0);
 
 				sprintf(response, "Name: %s\t\tSize: %d bytes\t\tCreated date: %s", File_info.file_name, File_info.file_size, File_info.file_created_date);
 
 				if (File_info.file_size == -1)
 					sprintf(response, "File not found.\n");
+				else if (File_info.file_size == 0)
+					sprintf(response, "Some error occured.\n");
 			}
+		}
+		else if (strcmp(token, "tarfgetz") == 0)
+		{
+			char *size1_str = strtok(NULL, " ");
+			char *size2_str = strtok(NULL, " ");
+
+			if (size1_str == NULL || size2_str == NULL)
+				sprintf(response, "The syntax is Invalid. Please try again.\n");
+			else
+			{
+				int size1 = atoi(size1_str);
+				int size2 = atoi(size2_str);
+				if (size1 < 0 || size2 < 0 || size1 > size2)
+					sprintf(response, "The size range is invalid. Please try again.\n");
+				else
+				{
+					// get files matching the size range
+					bool status = get_files_matching_size("$HOME", size1, size2);
+					if (status)
+						sprintf(response, "tar file");
+					else
+						sprintf(response, "No files found with given size range.\n");
+
+					// if unzip_flag is present, then unzip the files on client side
+				}
+			}
+		}
+		else if (strcmp(token, "getdirf") == 0)
+		{
+			char *date1_str = strtok(NULL, " ");
+			char *date2_str = strtok(NULL, " ");
+
+			if (date1_str == NULL || date2_str == NULL)
+				sprintf(response, "Invalid syntax. Please try again.\n");
+			else
+			{
+				// get files matching date range
+				bool status = get_files_matching_date("$HOME", date1_str, date2_str);
+				if (status)
+					sprintf(response, "tar file");
+				else
+					sprintf(response, "No files found with given date range.\n");
+			}
+		}
+		else if (strcmp(token, "targzf") == 0)
+		{
+			char *ext1 = strtok(NULL, " ");
+			char *ext2 = strtok(NULL, " ");
+			char *ext3 = strtok(NULL, " ");
+			char *ext4 = strtok(NULL, " ");
+
+			// check if any of the specified files are present
+			bool status = get_files_matching_ext("$HOME", ext1, ext2, ext3, ext4);
+			if (status)
+				sprintf(response, "tar file");
+			else
+				sprintf(response, "No file found.\n");
 		}
 		else if (strcmp(token, "quit") == 0)
 		{
@@ -143,7 +261,7 @@ void processclient(int skt_fd)
 		else
 			sprintf(response, "The syntax is invalid. Please try again.\n");
 
-		// Send response to client
+		// send response to client
 		write(skt_fd, response, strlen(response));
 		// send(skt_fd, response, strlen(response), 0);
 	}
@@ -161,15 +279,13 @@ int main(int argc, char const *argv[])
 	int addrlen = sizeof(serv_addr);
 	int no_of_clients = 1;
 
-	// Create Raw socket
 	// Create socket file descriptor
+	// use default protocol (i.e TCP)
 	if ((serv_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	{
 		perror("socket failed");
 		exit(EXIT_FAILURE);
 	}
-
-	////////////////////// TODO: check this ////////////////////////
 
 	// Attach socket to the port 8080
 	if (setsockopt(serv_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)) < 0)
@@ -192,8 +308,8 @@ int main(int argc, char const *argv[])
 	}
 
 	// listen to the socket
-	// queue of size 150
-	if (listen(serv_fd, 150) < 0)
+	// queue of size BACKLOG
+	if (listen(serv_fd, BACKLOG) < 0)
 	{
 		perror("listen");
 		exit(EXIT_FAILURE);
@@ -209,6 +325,7 @@ int main(int argc, char const *argv[])
 			exit(EXIT_FAILURE);
 		}
 
+		printf("New connection from client: %s...\n", inet_ntoa(serv_addr.sin_addr));
 		// load balancing from server to mirror
 		// if active clients less than =6 or is an odd no. after 12 connections
 		// to be handled by server
@@ -217,7 +334,7 @@ int main(int argc, char const *argv[])
 			pid_t pid = fork();
 			if (pid == 0)
 			{
-				// Child process
+				// child process
 				close(serv_fd);
 				processclient(new_skt);
 			}
@@ -229,11 +346,11 @@ int main(int argc, char const *argv[])
 			}
 			else
 			{
-				// Parent process
+				// parent process
 				close(new_skt);
 
 				while (waitpid(-1, NULL, WNOHANG) > 0)
-					; // Clean up zombie processes
+					; // clean up zombie processes
 			}
 		}
 		else
