@@ -11,14 +11,15 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <stdbool.h>
-#include<limits.h>
+#include <limits.h>
 
+// #define INT_MAX 2147483647
 #define BUFSIZE 1024
 #define _XOPEN_SOURCE 500
 #define PORT 8080
 #define MIRROR_PORT 7001
 #define BACKLOG 200
-char * rootDirectory="$HOME/ASP";
+char *rootDirectory = "$HOME";
 struct
 {
 	char *file_name;
@@ -29,46 +30,54 @@ struct
 int day, year, hour, min, sec;
 char month[4];
 
-
 // send message to client
-void sendControlMessage(int skt_fd, char * msg){
+void sendControlMessage(int skt_fd, char *msg)
+{
 	write(skt_fd, msg, strlen(msg));
 }
 
 // send message to client
-void sendMessage(int skt_fd, char * msg){
+void sendMessage(int skt_fd, char *msg)
+{
 	write(skt_fd, msg, strlen(msg));
 }
-
-
 
 // send tar file to the client
-bool sendFileToClient(char *file, int socket) {
-	
+bool sendFileToClient(char *file, int socket)
+{
+
 	// open file in read mode
 	int fileTosend = open(file, O_RDONLY);
 	// handle error
-	if (fileTosend < 0) {
-        perror("Error in opening the temp.tar.gz file");
-        return false;
-    }
+	if (fileTosend < 0)
+	{
+		perror("Error in opening the temp.tar.gz file");
+		return false;
+	}
 
 	printf("sendoing");
 	char buffer[BUFSIZE];
-    ssize_t bytesRead;
+	ssize_t bytesRead;
 
 	// read file and write into socket fd
-   	while ((bytesRead = read(fileTosend, buffer, sizeof(buffer))) > 0) {
-        if (write(socket, buffer, bytesRead) == -1)
-            error("Sending file failed");
-    }
-	sendControlMessage(socket,"done");
-	//close file
+	while ((bytesRead = read(fileTosend, buffer, sizeof(buffer))) > 0)
+	{
+
+		printf("bytes read: %d\n", bytesRead);
+
+		if (write(socket, buffer, bytesRead) == -1)
+			perror("Sending file failed");
+
+		if (bytesRead < sizeof(buffer))
+			break;
+		// printf("bytes read: %d\n", bytesRead);
+	}
+
+	// sendControlMessage(socket, "done");
+	// close file
 	close(fileTosend);
 	return true;
 }
-
-
 
 void file_search(char *base_path, char *filename)
 {
@@ -124,7 +133,7 @@ int get_files(char *base_path, char *file1, char *file2, char *file3, char *file
 	// call system command to execute the the command
 	status = system(command_buf);
 
-	return status==0 ? true : false;
+	return status == 0 ? true : false;
 }
 /*
 	This function is responsible for handling tarfgetz command
@@ -150,7 +159,7 @@ bool get_files_matching_date(char *base_path, char *date1, char *date2)
 	// TODO: Handle the case when no file is found
 
 	char command_buf[BUFSIZE];
-	sprintf(command_buf, "find %s -type f -newermt \"%s\" ! -newermt \"%s\" -print0 | xargs -0 tar -czf temp.tar.gz",
+	sprintf(command_buf, "find %s -type f -newermt \"%s\" ! -newermt \"%s\" -print0 | xargs -0 tar -czf temp.tar.gz 2>/dev/null",
 					base_path, date1, date2);
 
 	int status = system(command_buf);
@@ -174,7 +183,7 @@ bool get_files_matching_ext(char *base_path, char *ext1, char *ext2, char *ext3,
 	if (ext4 != NULL)
 		sprintf(command_buf + strlen(command_buf), "-iname \"*.%s\" -o ", ext4);
 
-	sprintf(command_buf + strlen(command_buf), "-false \\) -print0 | xargs -0 tar -czf temp.tar.gz");
+	sprintf(command_buf + strlen(command_buf), "-false \\) -print0 | xargs -0 tar -czf temp.tar.gz 2>/dev/null");
 
 	int status = system(command_buf);
 
@@ -190,11 +199,9 @@ bool get_files_matching_ext(char *base_path, char *ext1, char *ext2, char *ext3,
 */
 void redirect_to_mirror(int skt_fd)
 {
-	sendControlMessage(skt_fd,"MIR");
+	sendControlMessage(skt_fd, "MIR");
 	close(skt_fd);
 }
-
-
 
 /*
 	This is the main function which handles the command from client
@@ -211,7 +218,7 @@ void processclient(int skt_fd)
 	// until the connection is closed or quit commmand is received
 	while (true)
 	{
-		//TODO: understand this command
+		// TODO: understand this command
 		if (response != NULL && strcmp(response, "Goodbye") == 0)
 			break;
 
@@ -229,25 +236,26 @@ void processclient(int skt_fd)
 		char *token = strtok(cmd, " ");
 
 		// handle commands
-		if (token == NULL){
+		if (token == NULL)
+		{
 			// incase there is empty input
 			sprintf(response, "The syntax is Invalid. Please try again.\n");
 		}
 		else if (strcmp(token, "fgets") == 0)
-		{	
+		{
 			// execcution of fgets command
-			
+
 			// get the first file
 			char *file1 = strtok(NULL, " ");
-			
+
 			// if there is no file name given
 			if (file1 == NULL)
 				sprintf(response, "The syntax is Invalid. Please try again.\n");
 			else
 			{
-				// as minimum requirement is 1 file which is satisfied 
+				// as minimum requirement is 1 file which is satisfied
 				// get other at max 3 files
-				
+
 				char *file2 = strtok(NULL, " ");
 				char *file3 = strtok(NULL, " ");
 				char *file4 = strtok(NULL, " ");
@@ -260,22 +268,22 @@ void processclient(int skt_fd)
 				{
 					// if files received
 					// Sending control message
-    				sendControlMessage(skt_fd, "FIL");
+					sendControlMessage(skt_fd, "FIL");
 
-					//send file
-					bool isSent=sendFileToClient("temp.tar.gz",skt_fd);
+					// send file
+					bool isSent = sendFileToClient("temp.tar.gz", skt_fd);
 
-					//TODO: check how to send message after this
-					// if(isSent){
-					// 	//sending control message
-    				// 	sendControlMessage(skt_fd, "File Sent");
+					// TODO: check how to send message after this
+					//  if(isSent){
+					//  	//sending control message
+					//  	sendControlMessage(skt_fd, "File Sent");
 					// }else{
 					// 	//sending control message
-    				// 	sendControlMessage(skt_fd, "File Sending Failed");
+					// 	sendControlMessage(skt_fd, "File Sending Failed");
 					// }
-					
 				}
-				else{
+				else
+				{
 					// No files found
 					sendControlMessage(skt_fd, "ERR");
 					sendMessage(skt_fd, "Error: No Files Found\n");
@@ -295,19 +303,20 @@ void processclient(int skt_fd)
 				file_search(rootDirectory, filename);
 
 				sprintf(response, "Name: %s\t\tSize: %d bytes\t\tCreated date: %s\n", File_info.file_name, File_info.file_size, File_info.file_created_date);
-				
+
 				if (File_info.file_size == -1)
 					sprintf(response, "File not found.\n");
 				else if (File_info.file_size == 0)
 					sprintf(response, "Some error occured.\n");
-				else{
+				else
+				{
 					write(skt_fd, response, sizeof(response));
 				}
 			}
 		}
 		else if (strcmp(token, "tarfgetz") == 0)
 		{
-				// TODO: NOT WORKING PROPERLY
+			// TODO: NOT WORKING PROPERLY
 
 			char *size1_str = strtok(NULL, " ");
 			char *size2_str = strtok(NULL, " ");
@@ -316,11 +325,12 @@ void processclient(int skt_fd)
 				sprintf(response, "The syntax is Invalid. Please try again.\n");
 			else
 			{
-				//TODO: provide proper msg
+				// TODO: provide proper msg
 
 				int size1 = atoi(size1_str);
 				int size2 = atoi(size2_str);
-				if (size1 < 0 || size2 < 0 || size1 > size2){
+				if (size1 < 0 || size2 < 0 || size1 > size2)
+				{
 					sendControlMessage(skt_fd, "ERR");
 					sendMessage(skt_fd, "Error: Invalid syntax\n");
 				}
@@ -329,31 +339,33 @@ void processclient(int skt_fd)
 					// get files matching the size range
 					bool status = get_files_matching_size(rootDirectory, size1, size2);
 
-					if (status){
+					if (status)
+					{
 						// if files received
 						// Sending control message
 						sendControlMessage(skt_fd, "FIL");
 
-						//send file
-						bool isSent=sendFileToClient("temp.tar.gz",skt_fd);
+						// send file
+						bool isSent = sendFileToClient("temp.tar.gz", skt_fd);
 
-						//TODO: check if success in sending file or not
-
-					}else{
+						// TODO: check if success in sending file or not
+					}
+					else
+					{
 						sendControlMessage(skt_fd, "ERR");
 						sendMessage(skt_fd, "Error: Some Error Occured, Possibly no files found.\n");
 					}
-					
 				}
 			}
 		}
 		else if (strcmp(token, "getdirf") == 0)
 		{
-			//TODO: provide proper msg
+			// TODO: provide proper msg
 			char *date1_str = strtok(NULL, " ");
 			char *date2_str = strtok(NULL, " ");
 
-			if (date1_str == NULL || date2_str == NULL){
+			if (date1_str == NULL || date2_str == NULL)
+			{
 				sendControlMessage(skt_fd, "ERR");
 				sendMessage(skt_fd, "Error: Invalid syntax\n");
 			}
@@ -361,17 +373,19 @@ void processclient(int skt_fd)
 			{
 				// get files matching date range
 				bool status = get_files_matching_date(rootDirectory, date1_str, date2_str);
-				if (status){
+				if (status)
+				{
 					// if files received
 					// Sending control message
-    				sendMessage(skt_fd, "FIL");
+					sendMessage(skt_fd, "FIL");
 
-					//send file
-					bool isSent=sendFileToClient("temp.tar.gz",skt_fd);
+					// send file
+					bool isSent = sendFileToClient("temp.tar.gz", skt_fd);
 
-					//TODO: check if success in sending file or not
+					// TODO: check if success in sending file or not
 				}
-				else{
+				else
+				{
 					sendControlMessage(skt_fd, "ERR");
 					sendMessage(skt_fd, "Error: Some Error Occured\n");
 				}
@@ -386,32 +400,34 @@ void processclient(int skt_fd)
 
 			// check if any of the specified files are present
 			bool status = get_files_matching_ext(rootDirectory, ext1, ext2, ext3, ext4);
-			if (status){
-					// if files received
-					// Sending control message
-    				sendMessage(skt_fd, "FIL");
+			if (status)
+			{
+				// if files received
+				// Sending control message
+				sendMessage(skt_fd, "FIL");
 
-					//send file
-					bool isSent=sendFileToClient("temp.tar.gz",skt_fd);
+				// send file
+				bool isSent = sendFileToClient("temp.tar.gz", skt_fd);
 
-					//TODO: check if success in sending file or not
-				}
-				else{
-					sendControlMessage(skt_fd, "ERR");
-					sendMessage(skt_fd, "Error: Some Error Occured\n");
-				}
+				// TODO: check if success in sending file or not
+			}
+			else
+			{
+				sendControlMessage(skt_fd, "ERR");
+				sendMessage(skt_fd, "Error: Some Error Occured\n");
+			}
 		}
 		else if (strcmp(token, "quit") == 0)
 		{
 			printf("client %d exited...\n", getpid());
 			sprintf(response, "Goodbye\n");
 		}
-		else{
+		else
+		{
 			// incase user enters the none of the above commands
 			sprintf(response, "Wrong command entered. Please try again.\n");
 		}
 
-		
 		// send response to client
 		// write(skt_fd, response, strlen(response));
 		// send(skt_fd, response, strlen(response), 0);
@@ -479,7 +495,6 @@ int main(int argc, char const *argv[])
 
 		printf("New connection from client: %s...\n", inet_ntoa(serv_addr.sin_addr));
 
-		
 		// load balancing from server to mirror
 		// if active clients less than =6 or is an odd no. after 12 connections
 		// to be handled by server
@@ -509,7 +524,7 @@ int main(int argc, char const *argv[])
 				// parent process
 				close(new_skt);
 
-				//TODO: Check if this is required or not
+				// TODO: Check if this is required or not
 				while (waitpid(-1, NULL, WNOHANG) > 0)
 					; // clean up zombie processes
 			}
@@ -522,9 +537,8 @@ int main(int argc, char const *argv[])
 		}
 
 		// increase counter for no of connections
-		no_of_clients=(no_of_clients+1)%INT_MAX;
+		no_of_clients = (no_of_clients + 1) % INT_MAX;
 	}
-
-	// exit 
-	exit(EXIT_SUCCESS);
 }
+
+// exit

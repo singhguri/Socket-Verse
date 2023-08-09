@@ -6,51 +6,61 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <limits.h>
-#include<fcntl.h>
+#include <fcntl.h>
 
 #define PORT 8080
 #define mirror_port 7001
 #define BUFSIZE 1024
+#define RECV_BUFSIZE 100000
 #define MAX_LENGTH_OF_COMMAND 10000
 
 bool needToUnzip = false;
-bool returnsTarFile=false;
-void receive_file(int file_fd, int socket) {
+bool returnsTarFile = false;
+void receive_file(int file_fd, int socket)
+{
+  if (file_fd < 0)
+  {
+    perror("Error creating file\n");
+    return;
+  }
 
-    if (file_fd < 0) {
-        perror("Error creating file\n");
-        return;
-    }
+  char buffer[RECV_BUFSIZE];
+  int bytesReceived;
+  printf("starting to ...");
+  while ((bytesReceived = read(socket, buffer, RECV_BUFSIZE)) > 0)
+  {
+    printf("%d received\n", bytesReceived);
+    // if (strcmp(buffer, "done") == 0)
+    //   break;
+    write(file_fd, buffer, bytesReceived);
 
-    char buffer[BUFSIZE];
-    ssize_t bytesReceived;
-    printf("starting to ...");
-    while (1 ) {
-      (bytesReceived = read(socket, buffer, BUFSIZE));
-      printf("%d received", bytesReceived);
-        // if(strcmp(buffer,"done")==0) break;
-        if(bytesReceived<=0) break;
-        write(file_fd, buffer, bytesReceived);
-        // printf("%s\n",buffer);
-    }
-    
+    if (bytesReceived <= RECV_BUFSIZE)
+      break;
+
+    printf("%s\n", buffer);
+  }
+
+  printf("done\n");
 }
 
-void receive_message(int socket, char * buffer) {
-    
-    ssize_t bytesReceived = read(socket, buffer, BUFSIZE);
-    if (bytesReceived > 0) {
-        printf("Message from server: %s\n", buffer);
-    }
+void receive_message(int socket, char *buffer)
+{
+
+  ssize_t bytesReceived = read(socket, buffer, BUFSIZE);
+  if (bytesReceived > 0)
+  {
+    printf("Message from server: %s\n", buffer);
+  }
 }
 
-void receive_control_message(int socket, char * buffer) {
-    
-    ssize_t bytesReceived = read(socket, buffer, 3);
-    if (bytesReceived > 0) {
-        printf("Control from server: %s\n", buffer);
-    }
-
+void receive_control_message(int socket, char *buffer)
+{
+  // FIL, MIR, ERR
+  ssize_t bytesReceived = read(socket, buffer, 3);
+  if (bytesReceived > 0)
+  {
+    printf("Control from server: %s\n", buffer);
+  }
 }
 
 // this function checks if the parameter is integer and is greater than 0
@@ -130,7 +140,7 @@ bool isValidDates(const char *sdate1, const char *sdate2)
     printf("Invalid Date format(YYYY-MM-DD) %s\n", sdate2);
     return false;
   }
-  printf("time to validate\n");
+  // printf("time to validate\n");
   // check if date1 <= date2
   // Compare the year
   if (date1[0] < date2[0])
@@ -196,7 +206,7 @@ bool validateTheCommand(char *command)
       printf("Wrong input: Number of files allowed is between 1 to 4\n");
       return false;
     }
-    returnsTarFile=true;
+    returnsTarFile = true;
     return true;
   }
   else if (strcmp(commandWithArgs[0], "tarfgetz") == 0)
@@ -224,7 +234,7 @@ bool validateTheCommand(char *command)
       printf("Wrong input: Allowed input format is tarfgetz size1 size2 <-u>\n");
       return false;
     }
-    returnsTarFile=true;
+    returnsTarFile = true;
     return true;
   }
   else if (strcmp(commandWithArgs[0], "filesrch") == 0)
@@ -262,7 +272,7 @@ bool validateTheCommand(char *command)
       return false;
     }
 
-    returnsTarFile=true;
+    returnsTarFile = true;
     return true;
   }
   else if (strcmp(commandWithArgs[0], "getdirf") == 0)
@@ -289,7 +299,7 @@ bool validateTheCommand(char *command)
       return false;
     }
 
-    returnsTarFile=true;
+    returnsTarFile = true;
     return true;
   }
   else if (strcmp(commandWithArgs[0], "quit") == 0)
@@ -314,7 +324,7 @@ int main(int argc, char const *argv[])
 
   char buff[BUFSIZE] = {'\0'};
   char command[BUFSIZE] = {'\0'};
-  char gf[BUFSIZE * 2] = {'\0'};
+
   int valid_syntax;
 
   if ((skt_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -351,7 +361,7 @@ int main(int argc, char const *argv[])
   {
 
     needToUnzip = false;
-    returnsTarFile=false;
+    returnsTarFile = false;
     // getting user input, from standard input
     fgets(inputByUser, MAX_LENGTH_OF_COMMAND, stdin);
 
@@ -374,7 +384,6 @@ int main(int argc, char const *argv[])
     // execute unzipping operation if need to unzip is true
     if (needToUnzip)
       printf("unzip it\n");
-    
 
     // TODO: send the command to server
     // Send input by user to server
@@ -388,57 +397,60 @@ int main(int argc, char const *argv[])
     // Handle response from server
     // handle_response(skt_fd);
 
-    char buffer[BUFSIZE]={0};
+    char buffer[BUFSIZE] = {0};
     receive_control_message(skt_fd, buffer);
     char resp[BUFSIZE] = {0};
-    if(strcmp(buffer,"MIR")==0){
+    if (strcmp(buffer, "MIR") == 0)
+    {
       // closing the current server connection
-        close(skt_fd);
-        printf("In here\n");
+      close(skt_fd);
+      printf("In here\n");
 
-        // Create new socket for the mirror server
-        skt_fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (skt_fd == -1)
-        {
-          perror("socket");
-          exit(EXIT_FAILURE);
-        }
+      // Create new socket for the mirror server
+      skt_fd = socket(AF_INET, SOCK_STREAM, 0);
+      if (skt_fd == -1)
+      {
+        perror("socket");
+        exit(EXIT_FAILURE);
+      }
 
-        memset(&mirror_addr, '\0', sizeof(mirror_addr));
-        mirror_addr.sin_family = AF_INET;
-        mirror_addr.sin_port = htons(mirror_port);
-        mirror_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+      memset(&mirror_addr, '\0', sizeof(mirror_addr));
+      mirror_addr.sin_family = AF_INET;
+      mirror_addr.sin_port = htons(mirror_port);
+      mirror_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-        // Connect to the mirror server
-        if (connect(skt_fd, (struct sockaddr *)&mirror_addr, sizeof(mirror_addr)) == -1)
-        {
-          perror("connect");
-          exit(EXIT_FAILURE);
-        }
+      // Connect to the mirror server
+      if (connect(skt_fd, (struct sockaddr *)&mirror_addr, sizeof(mirror_addr)) == -1)
+      {
+        perror("connect");
+        exit(EXIT_FAILURE);
+      }
     }
-    else if(strcmp(buffer,"FIL")==0){
-        printf("inside");
-        int file_fd;
-        if(returnsTarFile){
-            file_fd = open("received_file.tar.gz", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-            printf("calling");
-          receive_file(file_fd,skt_fd);
+    else if (strcmp(buffer, "FIL") == 0)
+    {
+      printf("inside");
+      int file_fd;
+      if (returnsTarFile)
+      {
+        // file_fd = open("received_file.tar.gz", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        file_fd = open("received_file.tar.gz", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        printf("calling");
+        receive_file(file_fd, skt_fd);
         printf("File received\n");
         close(file_fd);
-        }
-
-        
-    }else if(strcmp(buffer,"ERR")==0){
-        receive_message(skt_fd, resp);
-        printf("%s",resp);
-    }else{
-      printf("in else");
-        receive_message(skt_fd, resp);
-        printf("%s",resp);
+      }
     }
-
-    
-    
+    else if (strcmp(buffer, "ERR") == 0)
+    {
+      receive_message(skt_fd, resp);
+      printf("%s", resp);
+    }
+    else
+    {
+      printf("in else");
+      receive_message(skt_fd, resp);
+      printf("%s\n", buffer);
+    }
   }
 
   close(skt_fd);
