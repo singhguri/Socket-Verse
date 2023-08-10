@@ -11,7 +11,7 @@
 #define PORT 8080
 #define mirror_port 7001
 #define BUFSIZE 1024
-#define RECV_BUFSIZE 100000
+#define RECV_BUFSIZE 1000000
 #define MAX_LENGTH_OF_COMMAND 10000
 
 bool needToUnzip = false;
@@ -24,20 +24,18 @@ void receive_file(int file_fd, int socket)
     return;
   }
 
-  char buffer[RECV_BUFSIZE];
+  char buffer[BUFSIZE];
   int bytesReceived;
   printf("starting to ...");
-  while ((bytesReceived = read(socket, buffer, RECV_BUFSIZE)) > 0)
+  while ((bytesReceived = read(socket, buffer, BUFSIZE)) > 0)
   {
     printf("%d received\n", bytesReceived);
     // if (strcmp(buffer, "done") == 0)
     //   break;
     write(file_fd, buffer, bytesReceived);
 
-    if (bytesReceived <= RECV_BUFSIZE)
+    if (bytesReceived < BUFSIZE)
       break;
-
-    printf("%s\n", buffer);
   }
 
   printf("done\n");
@@ -60,6 +58,22 @@ void receive_control_message(int socket, char *buffer)
   if (bytesReceived > 0)
   {
     printf("Control from server: %s\n", buffer);
+  }
+}
+
+
+// unzip the file
+void unzipFile(char * fileName){
+  char command_buf[BUFSIZE];
+  int status;
+  sprintf(command_buf, "tar -xzf \"%s\" 2>/dev/null",
+					fileName);
+
+	// call system command to execute the the command
+	status = system(command_buf);
+
+	if(status!=0){
+    printf("Some error Occured while unzipping the file..\n");
   }
 }
 
@@ -256,12 +270,12 @@ bool validateTheCommand(char *command)
     // targzf <extension list> <-u> up to 4 different file types  max no. of token is 6
 
     // if it has -u option
-    if (strcmp(commandWithArgs[size - 1], "-u") == 0 && size > 3 && size <= 6)
+    if (strcmp(commandWithArgs[size - 1], "-u") == 0 && size > 2 && size <= 6)
     {
       // this is valid
       needToUnzip = true;
     }
-    else if (strcmp(commandWithArgs[size - 1], "-u") != 0 && size > 2 && size < 6)
+    else if (strcmp(commandWithArgs[size - 1], "-u") != 0 && size >= 2 && size < 6)
     {
       // no -u option
       // this is valid
@@ -382,17 +396,12 @@ int main(int argc, char const *argv[])
 
     // check if it has -u at the end of command unzip the results
     // execute unzipping operation if need to unzip is true
-    if (needToUnzip)
-      printf("unzip it\n");
-
+   
     // TODO: send the command to server
     // Send input by user to server
     send(skt_fd, copyOfUserInput, strlen(copyOfUserInput), 0);
 
-    // if input is quit, exit the client
-    // if (commandValidation && strcmp(inputByUser, "quit") == 0)
-    //   exit(EXIT_SUCCESS);
-
+  
     // TODO: receive the result from server
     // Handle response from server
     // handle_response(skt_fd);
@@ -428,7 +437,7 @@ int main(int argc, char const *argv[])
     }
     else if (strcmp(buffer, "FIL") == 0)
     {
-      printf("inside");
+      
       int file_fd;
       if (returnsTarFile)
       {
@@ -438,6 +447,16 @@ int main(int argc, char const *argv[])
         receive_file(file_fd, skt_fd);
         printf("File received\n");
         close(file_fd);
+
+
+        if (needToUnzip){
+          printf("Unzipping file...\n");
+          unzipFile("received_file.tar.gz");
+        }
+
+
+
+
       }
     }
     else if (strcmp(buffer, "ERR") == 0)
@@ -445,11 +464,14 @@ int main(int argc, char const *argv[])
       receive_message(skt_fd, resp);
       printf("%s", resp);
     }
-    else
+    else if(strcmp(buffer,"MSG")==0)
     {
-      printf("in else");
       receive_message(skt_fd, resp);
-      printf("%s\n", buffer);
+    }else if(strcmp(buffer,"QIT")==0){
+      //close socket fd
+      close(skt_fd);
+      printf("Connection is closed.\n");
+      exit(EXIT_SUCCESS);    
     }
   }
 

@@ -19,7 +19,7 @@
 #define PORT 8080
 #define MIRROR_PORT 7001
 #define BACKLOG 200
-char *rootDirectory = "$HOME";
+char *rootDirectory = "$HOME/ASP";
 struct
 {
 	char *file_name;
@@ -304,13 +304,13 @@ void processclient(int skt_fd)
 
 				sprintf(response, "Name: %s\t\tSize: %d bytes\t\tCreated date: %s\n", File_info.file_name, File_info.file_size, File_info.file_created_date);
 
-				if (File_info.file_size == -1)
-					sprintf(response, "File not found.\n");
-				else if (File_info.file_size == 0)
-					sprintf(response, "Some error occured.\n");
-				else
-				{
-					write(skt_fd, response, sizeof(response));
+				if (File_info.file_size == -1){
+					sendControlMessage(skt_fd,"ERR");
+					sendMessage(skt_fd,"File not found.\n");
+				}else{
+					sendControlMessage(skt_fd,"MSG");
+					sendMessage(skt_fd,response);
+					
 				}
 			}
 		}
@@ -377,7 +377,7 @@ void processclient(int skt_fd)
 				{
 					// if files received
 					// Sending control message
-					sendMessage(skt_fd, "FIL");
+					sendControlMessage(skt_fd, "FIL");
 
 					// send file
 					bool isSent = sendFileToClient("temp.tar.gz", skt_fd);
@@ -404,7 +404,7 @@ void processclient(int skt_fd)
 			{
 				// if files received
 				// Sending control message
-				sendMessage(skt_fd, "FIL");
+				sendControlMessage(skt_fd, "FIL");
 
 				// send file
 				bool isSent = sendFileToClient("temp.tar.gz", skt_fd);
@@ -419,8 +419,15 @@ void processclient(int skt_fd)
 		}
 		else if (strcmp(token, "quit") == 0)
 		{
-			printf("client %d exited...\n", getpid());
-			sprintf(response, "Goodbye\n");
+			//send quit control signal to client
+			sendControlMessage(skt_fd,"QIT");
+			printf("Closing client connection.\n");
+			//sleep for second before quit
+			sleep(1);
+			//close socket
+			close(skt_fd);
+			// exit the child fork
+			exit(EXIT_SUCCESS);
 		}
 		else
 		{
@@ -428,9 +435,6 @@ void processclient(int skt_fd)
 			sprintf(response, "Wrong command entered. Please try again.\n");
 		}
 
-		// send response to client
-		// write(skt_fd, response, strlen(response));
-		// send(skt_fd, response, strlen(response), 0);
 	}
 
 	close(skt_fd);
