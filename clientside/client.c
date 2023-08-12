@@ -26,14 +26,16 @@ void receive_file(int file_fd, int socket)
 
   char buffer[BUFSIZE];
   int bytesReceived;
-  printf("starting to ...");
+
+  // read from the socket fd
   while ((bytesReceived = read(socket, buffer, BUFSIZE)) > 0)
   {
-    printf("%d received\n", bytesReceived);
-    // if (strcmp(buffer, "done") == 0)
-    //   break;
+    // printf("%d received\n", bytesReceived);
+    //write to the new tar file
     write(file_fd, buffer, bytesReceived);
 
+    // if theno. of bytes received are less the buff size exit
+    // this means there are no more character in socket
     if (bytesReceived < BUFSIZE)
       break;
   }
@@ -66,6 +68,8 @@ void receive_control_message(int socket, char *buffer)
 void unzipFile(char * fileName){
   char command_buf[BUFSIZE];
   int status;
+
+  // unzip file using tar command -x to unzip
   sprintf(command_buf, "tar -xzf \"%s\" 2>/dev/null",
 					fileName);
 
@@ -74,6 +78,8 @@ void unzipFile(char * fileName){
 
 	if(status!=0){
     printf("Some error Occured while unzipping the file..\n");
+  }else{
+    printf("File Unzipped Successfully.\n");
   }
 }
 
@@ -99,6 +105,7 @@ long isValidDigitsRange(char *val)
   }
 }
 
+// for getdirf command check if the dates are valid
 bool isValidDates(const char *sdate1, const char *sdate2)
 {
 
@@ -188,7 +195,6 @@ bool validateTheCommand(char *command)
 {
 
   // tokenize the command
-
   char commandWithArgs[10][PATH_MAX];
   int size = 0;
 
@@ -336,19 +342,21 @@ int main(int argc, char const *argv[])
   int skt_fd;
   struct sockaddr_in serv_addr, mirror_addr;
 
+
   char buff[BUFSIZE] = {'\0'};
   char command[BUFSIZE] = {'\0'};
 
-  int valid_syntax;
-
+  // create a socket and handle error
   if ((skt_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
   {
     printf("\n Socket creation error \n");
     return -1;
   }
 
+  // set server address to NULL
   memset(&serv_addr, '\0', sizeof(serv_addr));
 
+  // set port number and other parameters
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_port = htons(PORT);
 
@@ -359,14 +367,57 @@ int main(int argc, char const *argv[])
     return -1;
   }
 
+  // create a connection to server from client side
   if (connect(skt_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
   {
     printf("\nConnection has Failed \n");
     return -1;
   }
 
-  printf("Connected to server.\n");
-  printf("Enter a command (or 'quit' to exit):\n");
+    //clear the buffer
+    char buffer[BUFSIZE] = {0};
+    char resp[BUFSIZE] = {0};
+    // check the control message
+    receive_control_message(skt_fd, buffer);
+
+    // if the control message is MIR redirect client to mirror
+    if (strcmp(buffer, "MIR") == 0)
+    {
+      // closing the current server connection
+      close(skt_fd);
+
+      // Create new socket for the mirror server
+      skt_fd = socket(AF_INET, SOCK_STREAM, 0);
+      if (skt_fd == -1)
+      {
+        perror("socket");
+        exit(EXIT_FAILURE);
+      }
+
+      memset(&mirror_addr, '\0', sizeof(mirror_addr));
+      mirror_addr.sin_family = AF_INET;
+      mirror_addr.sin_port = htons(mirror_port);
+      mirror_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+      // Connect to the mirror server
+      if (connect(skt_fd, (struct sockaddr *)&mirror_addr, sizeof(mirror_addr)) == -1)
+      {
+        perror("connect");
+        exit(EXIT_FAILURE);
+      }
+
+      // check the control message exepectting CTM now
+      receive_control_message(skt_fd, buffer);
+    }
+    
+    // if control message iis CTM
+    if(strcmp(buffer, "CTM") == 0){
+      printf("Connected to Mirror.\n");
+    }
+    // if control message is CTS
+    else if(strcmp(buffer, "CTS") == 0){
+      printf("Connected to server.\n");
+    }
 
   char inputByUser[MAX_LENGTH_OF_COMMAND];
   char copyOfUserInput[MAX_LENGTH_OF_COMMAND];
@@ -374,8 +425,12 @@ int main(int argc, char const *argv[])
   while (1)
   {
 
+    printf("Enter a command (or 'quit' to exit):\n");
+
+    //flags
     needToUnzip = false;
     returnsTarFile = false;
+
     // getting user input, from standard input
     fgets(inputByUser, MAX_LENGTH_OF_COMMAND, stdin);
 
@@ -397,84 +452,75 @@ int main(int argc, char const *argv[])
     // check if it has -u at the end of command unzip the results
     // execute unzipping operation if need to unzip is true
    
-    // TODO: send the command to server
+    // TODO: change send command to write command
     // Send input by user to server
     send(skt_fd, copyOfUserInput, strlen(copyOfUserInput), 0);
 
   
-    // TODO: receive the result from server
-    // Handle response from server
-    // handle_response(skt_fd);
-
-    char buffer[BUFSIZE] = {0};
+    // check the control message
     receive_control_message(skt_fd, buffer);
-    char resp[BUFSIZE] = {0};
-    if (strcmp(buffer, "MIR") == 0)
-    {
-      // closing the current server connection
-      close(skt_fd);
-      printf("In here\n");
-
-      // Create new socket for the mirror server
-      skt_fd = socket(AF_INET, SOCK_STREAM, 0);
-      if (skt_fd == -1)
-      {
-        perror("socket");
-        exit(EXIT_FAILURE);
-      }
-
-      memset(&mirror_addr, '\0', sizeof(mirror_addr));
-      mirror_addr.sin_family = AF_INET;
-      mirror_addr.sin_port = htons(mirror_port);
-      mirror_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-      // Connect to the mirror server
-      if (connect(skt_fd, (struct sockaddr *)&mirror_addr, sizeof(mirror_addr)) == -1)
-      {
-        perror("connect");
-        exit(EXIT_FAILURE);
-      }
-    }
-    else if (strcmp(buffer, "FIL") == 0)
+    
+    
+    // if thte control message is FIL the server will be sending a file
+    if (strcmp(buffer, "FIL") == 0)
     {
       
       int file_fd;
+
+      // check if the command requires tar file as response
       if (returnsTarFile)
       {
-        // file_fd = open("received_file.tar.gz", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        file_fd = open("received_file.tar.gz", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        printf("calling");
+        // create a new temp.tar.gz
+        file_fd = open("temp.tar.gz", O_WRONLY | O_CREAT | O_TRUNC, 0777);
+
+        printf("Receiving ....");
+
+        //receive file from server
         receive_file(file_fd, skt_fd);
+
         printf("File received\n");
+
+        //close file desc
         close(file_fd);
 
-
+        // if there is -u option
+        // unzip the file
         if (needToUnzip){
           printf("Unzipping file...\n");
-          unzipFile("received_file.tar.gz");
+          //call the function
+          unzipFile("temp.tar.gz");
         }
-
-
-
-
+      }else{
+        //handle error
+        printf("Some error occured, Server is trying to send a file but this command doesnot accepts file as a response.\n");
       }
     }
+    // if there is a control message of ERR
     else if (strcmp(buffer, "ERR") == 0)
     {
+      // recive the message from server in resp
       receive_message(skt_fd, resp);
-      printf("%s", resp);
     }
+
+    // if the server is returning message in case of  FILESRCH
     else if(strcmp(buffer,"MSG")==0)
-    {
+    { 
+      //recceive message
       receive_message(skt_fd, resp);
-    }else if(strcmp(buffer,"QIT")==0){
+
+    }
+    
+    // if there is quit signal dfrom server
+    else if(strcmp(buffer,"QIT")==0){
       //close socket fd
       close(skt_fd);
       printf("Connection is closed.\n");
+      // exit this process.
       exit(EXIT_SUCCESS);    
     }
   }
 
+  // just for  precaution purpose might not get called.
   close(skt_fd);
   printf("Connection is closed.\n");
 

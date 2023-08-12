@@ -9,6 +9,9 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <stdbool.h>
+#include <limits.h>
 
 #define PORT 7001
 #define _XOPEN_SOURCE 500
@@ -59,7 +62,7 @@ bool sendFileToClient(char *file, int socket_fd)
   while ((bytesRead = read(fileTosend, buffer, sizeof(buffer))) > 0)
   {
 
-    printf("bytes read: %d\n", bytesRead);
+    // printf("bytes read: %d\n", bytesRead);
 
     if (write(socket_fd, buffer, bytesRead) == -1)
       perror("Sending file failed");
@@ -182,16 +185,6 @@ bool get_files_matching_ext(char *base_path, char *ext1, char *ext2, char *ext3,
 }
 
 /*
-  This function is responsible for the redirection of client to mirror
-  This function sends the message to client to connect to mirror
-*/
-void redirect_to_mirror(int skt_fd)
-{
-  sendControlMessage(skt_fd, "MIR");
-  close(skt_fd);
-}
-
-/*
   This is the main function which handles the command from client
 
 */
@@ -214,6 +207,9 @@ void processclient(int skt_fd)
     int sizeOfInput = read(skt_fd, cmd, sizeof(cmd));
     // add null character at the end of the command
     cmd[sizeOfInput] = '\0';
+
+    // print thte command 
+    printf("Executing: %s\n", cmd);
 
     // Parse command by tokenizing
     char *token = strtok(cmd, " ");
@@ -441,6 +437,9 @@ int main(int argc, char const *argv[])
     exit(EXIT_FAILURE);
   }
 
+  // waiting for client
+	printf("Waiting for client...\n");
+
   while (true)
   {
     if ((new_skt = accept(srv_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
@@ -448,7 +447,9 @@ int main(int argc, char const *argv[])
       perror("accept");
       exit(EXIT_FAILURE);
     }
-
+    
+    // sedn control message to client "CTM(Connected to mirror)"
+		sendControlMessage(new_skt,"CTM");
     printf("The New client is connected. Forking child process...\n");
 
     pid_t pid = fork();

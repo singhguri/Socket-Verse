@@ -65,7 +65,7 @@ bool sendFileToClient(char *file, int socket_fd)
 	while ((bytesRead = read(fileTosend, buffer, sizeof(buffer))) > 0)
 	{
 
-		printf("bytes read: %d\n", bytesRead);
+		// printf("bytes read: %d\n", bytesRead);
 
 		if (write(socket_fd, buffer, bytesRead) == -1)
 			perror("Sending file failed");
@@ -221,6 +221,9 @@ void processclient(int skt_fd)
 		// add null character at the end of the command
 		cmd[sizeOfInput] = '\0';
 
+		// print thte command
+		printf("Executing: %s\n", cmd);
+		
 		// Parse command by tokenizing
 		char *token = strtok(cmd, " ");
 
@@ -465,7 +468,7 @@ int main(int argc, char const *argv[])
 			exit(EXIT_FAILURE);
 		}
 
-		printf("New connection from client: %s...\n", inet_ntoa(serv_addr.sin_addr));
+		
 
 		// load balancing from server to mirror
 		// if active clients less than =6 or is an odd no. after 12 connections
@@ -473,6 +476,10 @@ int main(int argc, char const *argv[])
 		if (no_of_clients <= 6 || (no_of_clients > 12 && no_of_clients % 2 == 1))
 		{
 			/// handle by server
+			// sedn control message to client "CTS(Connected to server)"
+			sendControlMessage(new_skt,"CTS");
+			
+			printf("New connection from client: %s...\n", inet_ntoa(serv_addr.sin_addr));
 
 			/// fork a child and call process client func
 			pid_t pid = fork();
@@ -503,7 +510,7 @@ int main(int argc, char const *argv[])
 		else
 		{
 			// redirecting to mirror server
-			printf("Redirecting to mirror\n");
+			// printf("Redirecting to mirror\n");
 			redirect_to_mirror(new_skt);
 		}
 
