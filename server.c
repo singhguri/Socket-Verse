@@ -223,7 +223,7 @@ void processclient(int skt_fd)
 
 		// print thte command
 		printf("Executing: %s\n", cmd);
-		
+
 		// Parse command by tokenizing
 		char *token = strtok(cmd, " ");
 
@@ -468,8 +468,6 @@ int main(int argc, char const *argv[])
 			exit(EXIT_FAILURE);
 		}
 
-		
-
 		// load balancing from server to mirror
 		// if active clients less than =6 or is an odd no. after 12 connections
 		// to be handled by server
@@ -477,8 +475,8 @@ int main(int argc, char const *argv[])
 		{
 			/// handle by server
 			// sedn control message to client "CTS(Connected to server)"
-			sendControlMessage(new_skt,"CTS");
-			
+			sendControlMessage(new_skt, "CTS");
+
 			printf("New connection from client: %s...\n", inet_ntoa(serv_addr.sin_addr));
 
 			/// fork a child and call process client func

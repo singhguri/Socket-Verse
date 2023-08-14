@@ -11,7 +11,6 @@
 #define PORT 8080
 #define mirror_port 7001
 #define BUFSIZE 1024
-#define RECV_BUFSIZE 1000000
 #define MAX_LENGTH_OF_COMMAND 10000
 
 bool needToUnzip = false;
@@ -62,7 +61,7 @@ void receive_message(int socket, char *buffer)
 
 void receive_control_message(int socket, char *buffer)
 {
-  // FIL, MIR, ERR
+  // FIL, MIR, ERR, CTM, CTS, QIT
   ssize_t bytesReceived = read(socket, buffer, 3);
   if (bytesReceived > 0)
   {
@@ -436,7 +435,7 @@ int main(int argc, char const *argv[])
   while (1)
   {
 
-    printf("Enter a command (or 'quit' to exit):\n");
+    printf("Enter a command\n-filesrch <filename>\n-fgets <file1> <file2> <file3> <file4>\n-tarfgetz <size1> <size2> <-u>\n-getdirf <date1> <date2> <-u>\n-targzf <ext1> <ext2> <ext3> <ext4> <-u>\n-quit\n");
 
     // flags
     needToUnzip = false;
