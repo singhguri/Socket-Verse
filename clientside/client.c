@@ -15,7 +15,14 @@
 #define MAX_LENGTH_OF_COMMAND 10000
 
 bool needToUnzip = false;
-bool returnsTarFile = false;
+bool returns_tar_file = false;
+
+// function to send message to server
+void send_control_message(int skt_fd, char *msg)
+{
+  write(skt_fd, msg, strlen(msg));
+}
+
 void receive_file(int file_fd, int socket)
 {
   if (file_fd < 0)
@@ -31,7 +38,7 @@ void receive_file(int file_fd, int socket)
   while ((bytesReceived = read(socket, buffer, BUFSIZE)) > 0)
   {
     // printf("%d received\n", bytesReceived);
-    //write to the new tar file
+    // write to the new tar file
     write(file_fd, buffer, bytesReceived);
 
     // if theno. of bytes received are less the buff size exit
@@ -63,28 +70,31 @@ void receive_control_message(int socket, char *buffer)
   }
 }
 
-
 // unzip the file
-void unzipFile(char * fileName){
+void unzipFile(char *fileName)
+{
   char command_buf[BUFSIZE];
   int status;
 
   // unzip file using tar command -x to unzip
   sprintf(command_buf, "tar -xzf \"%s\" 2>/dev/null",
-					fileName);
+          fileName);
 
-	// call system command to execute the the command
-	status = system(command_buf);
+  // call system command to execute the the command
+  status = system(command_buf);
 
-	if(status!=0){
+  if (status != 0)
+  {
     printf("Some error Occured while unzipping the file..\n");
-  }else{
+  }
+  else
+  {
     printf("File Unzipped Successfully.\n");
   }
 }
 
 // this function checks if the parameter is integer and is greater than 0
-long isValidDigitsRange(char *val)
+long is_valid_digits_range(char *val)
 {
   char *helperPtr;
   long number;
@@ -106,7 +116,7 @@ long isValidDigitsRange(char *val)
 }
 
 // for getdirf command check if the dates are valid
-bool isValidDates(const char *sdate1, const char *sdate2)
+bool is_valid_dates(const char *sdate1, const char *sdate2)
 {
 
   // year, month , date
@@ -191,11 +201,11 @@ bool isValidDates(const char *sdate1, const char *sdate2)
 }
 
 // validate the syntax of commands
-bool validateTheCommand(char *command)
+bool validate_the_command(char *command)
 {
 
   // tokenize the command
-  char commandWithArgs[10][PATH_MAX];
+  char command_with_args[10][PATH_MAX];
   int size = 0;
 
   // used for tokenizing
@@ -208,15 +218,15 @@ bool validateTheCommand(char *command)
   while (token != NULL)
   {
     // copy string to array
-    strcpy(commandWithArgs[size++], token);
+    strcpy(command_with_args[size++], token);
 
     // tokenize
     token = strtok_r(NULL, " ", &tempPtr);
   }
 
-  // commandWithArgs[0] contains the name of command
+  // command_with_args[0] contains the name of command
 
-  if (strcmp(commandWithArgs[0], "fgets") == 0)
+  if (strcmp(command_with_args[0], "fgets") == 0)
   {
 
     // where the command is fgets
@@ -226,25 +236,25 @@ bool validateTheCommand(char *command)
       printf("Wrong input: Number of files allowed is between 1 to 4\n");
       return false;
     }
-    returnsTarFile = true;
+    returns_tar_file = true;
     return true;
   }
-  else if (strcmp(commandWithArgs[0], "tarfgetz") == 0)
+  else if (strcmp(command_with_args[0], "tarfgetz") == 0)
   {
 
     // where the command is tarfgetz
     // tarfgetz size1 size2 <-u> so max no. of tokens is 4
     if (size < 3)
       return false;
-    int n1 = isValidDigitsRange(commandWithArgs[1]);
-    int n2 = isValidDigitsRange(commandWithArgs[2]);
+    int n1 = is_valid_digits_range(command_with_args[1]);
+    int n2 = is_valid_digits_range(command_with_args[2]);
     // if it has -u option
-    if (strcmp(commandWithArgs[size - 1], "-u") == 0 && size == 4 && n1 != -1 && n2 != -1 && n1 <= n2)
+    if (strcmp(command_with_args[size - 1], "-u") == 0 && size == 4 && n1 != -1 && n2 != -1 && n1 <= n2)
     {
       // this is valid
       needToUnzip = true;
     }
-    else if (strcmp(commandWithArgs[size - 1], "-u") != 0 && size == 3 && n1 != -1 && n2 != -1 && n1 <= n2)
+    else if (strcmp(command_with_args[size - 1], "-u") != 0 && size == 3 && n1 != -1 && n2 != -1 && n1 <= n2)
     {
       // no -u option
       // this is valid
@@ -254,10 +264,10 @@ bool validateTheCommand(char *command)
       printf("Wrong input: Allowed input format is tarfgetz size1 size2 <-u>\n");
       return false;
     }
-    returnsTarFile = true;
+    returns_tar_file = true;
     return true;
   }
-  else if (strcmp(commandWithArgs[0], "filesrch") == 0)
+  else if (strcmp(command_with_args[0], "filesrch") == 0)
   {
     // where the command is filesrch
     // filesrch filename so max no. of tokens is 2
@@ -269,19 +279,19 @@ bool validateTheCommand(char *command)
 
     return true;
   }
-  else if (strcmp(commandWithArgs[0], "targzf") == 0)
+  else if (strcmp(command_with_args[0], "targzf") == 0)
   {
 
     // where the command is targzf
     // targzf <extension list> <-u> up to 4 different file types  max no. of token is 6
 
     // if it has -u option
-    if (strcmp(commandWithArgs[size - 1], "-u") == 0 && size > 2 && size <= 6)
+    if (strcmp(command_with_args[size - 1], "-u") == 0 && size > 2 && size <= 6)
     {
       // this is valid
       needToUnzip = true;
     }
-    else if (strcmp(commandWithArgs[size - 1], "-u") != 0 && size >= 2 && size < 6)
+    else if (strcmp(command_with_args[size - 1], "-u") != 0 && size >= 2 && size < 6)
     {
       // no -u option
       // this is valid
@@ -292,23 +302,23 @@ bool validateTheCommand(char *command)
       return false;
     }
 
-    returnsTarFile = true;
+    returns_tar_file = true;
     return true;
   }
-  else if (strcmp(commandWithArgs[0], "getdirf") == 0)
+  else if (strcmp(command_with_args[0], "getdirf") == 0)
   {
 
     // where the command is getdirf
     // getdirf date1 date2 <-u> max no. of tokens is 4
 
     // if it has -u option check size of command and check if date1< date2 and are valid dates
-    if (strcmp(commandWithArgs[size - 1], "-u") == 0 && size == 4 && isValidDates(commandWithArgs[1], commandWithArgs[2]))
+    if (strcmp(command_with_args[size - 1], "-u") == 0 && size == 4 && is_valid_dates(command_with_args[1], command_with_args[2]))
     {
       // this is valid
       needToUnzip = true;
     }
     // if it doesn't have -u option check size of command and check if date1< date2 and are valid dates
-    else if (strcmp(commandWithArgs[size - 1], "-u") != 0 && size == 3 && isValidDates(commandWithArgs[1], commandWithArgs[2]))
+    else if (strcmp(command_with_args[size - 1], "-u") != 0 && size == 3 && is_valid_dates(command_with_args[1], command_with_args[2]))
     {
       // no -u option
       // this is valid
@@ -319,10 +329,10 @@ bool validateTheCommand(char *command)
       return false;
     }
 
-    returnsTarFile = true;
+    returns_tar_file = true;
     return true;
   }
-  else if (strcmp(commandWithArgs[0], "quit") == 0)
+  else if (strcmp(command_with_args[0], "quit") == 0)
   {
     // quit the client
     return true;
@@ -341,7 +351,6 @@ int main(int argc, char const *argv[])
 
   int skt_fd;
   struct sockaddr_in serv_addr, mirror_addr;
-
 
   char buff[BUFSIZE] = {'\0'};
   char command[BUFSIZE] = {'\0'};
@@ -374,50 +383,52 @@ int main(int argc, char const *argv[])
     return -1;
   }
 
-    //clear the buffer
-    char buffer[BUFSIZE] = {0};
-    char resp[BUFSIZE] = {0};
-    // check the control message
-    receive_control_message(skt_fd, buffer);
+  // clear the buffer
+  char buffer[BUFSIZE] = {0};
+  char resp[BUFSIZE] = {0};
+  // check the control message
+  receive_control_message(skt_fd, buffer);
 
-    // if the control message is MIR redirect client to mirror
-    if (strcmp(buffer, "MIR") == 0)
+  // if the control message is MIR redirect client to mirror
+  if (strcmp(buffer, "MIR") == 0)
+  {
+    // closing the current server connection
+    close(skt_fd);
+
+    // Create new socket for the mirror server
+    skt_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (skt_fd == -1)
     {
-      // closing the current server connection
-      close(skt_fd);
-
-      // Create new socket for the mirror server
-      skt_fd = socket(AF_INET, SOCK_STREAM, 0);
-      if (skt_fd == -1)
-      {
-        perror("socket");
-        exit(EXIT_FAILURE);
-      }
-
-      memset(&mirror_addr, '\0', sizeof(mirror_addr));
-      mirror_addr.sin_family = AF_INET;
-      mirror_addr.sin_port = htons(mirror_port);
-      mirror_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-      // Connect to the mirror server
-      if (connect(skt_fd, (struct sockaddr *)&mirror_addr, sizeof(mirror_addr)) == -1)
-      {
-        perror("connect");
-        exit(EXIT_FAILURE);
-      }
-
-      // check the control message exepectting CTM now
-      receive_control_message(skt_fd, buffer);
+      perror("socket");
+      exit(EXIT_FAILURE);
     }
-    
-    // if control message iis CTM
-    if(strcmp(buffer, "CTM") == 0){
-      printf("Connected to Mirror.\n");
+
+    memset(&mirror_addr, '\0', sizeof(mirror_addr));
+    mirror_addr.sin_family = AF_INET;
+    mirror_addr.sin_port = htons(mirror_port);
+    mirror_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    // Connect to the mirror server
+    if (connect(skt_fd, (struct sockaddr *)&mirror_addr, sizeof(mirror_addr)) == -1)
+    {
+      perror("connect");
+      exit(EXIT_FAILURE);
     }
-    // if control message is CTS
-    else if(strcmp(buffer, "CTS") == 0){
-      printf("Connected to server.\n");
-    }
+
+    // check the control message exepectting CTM now
+    receive_control_message(skt_fd, buffer);
+  }
+
+  // if control message iis CTM
+  if (strcmp(buffer, "CTM") == 0)
+  {
+    printf("Connected to Mirror.\n");
+  }
+  // if control message is CTS
+  else if (strcmp(buffer, "CTS") == 0)
+  {
+    printf("Connected to server.\n");
+  }
 
   char inputByUser[MAX_LENGTH_OF_COMMAND];
   char copyOfUserInput[MAX_LENGTH_OF_COMMAND];
@@ -427,9 +438,9 @@ int main(int argc, char const *argv[])
 
     printf("Enter a command (or 'quit' to exit):\n");
 
-    //flags
+    // flags
     needToUnzip = false;
-    returnsTarFile = false;
+    returns_tar_file = false;
 
     // getting user input, from standard input
     fgets(inputByUser, MAX_LENGTH_OF_COMMAND, stdin);
@@ -441,7 +452,7 @@ int main(int argc, char const *argv[])
     strncpy(copyOfUserInput, inputByUser, MAX_LENGTH_OF_COMMAND);
 
     // validate the command syntax
-    bool commandValidation = validateTheCommand(inputByUser);
+    bool commandValidation = validate_the_command(inputByUser);
 
     // clear buffer and continue if command validation is false
     if (!commandValidation)
@@ -451,47 +462,47 @@ int main(int argc, char const *argv[])
 
     // check if it has -u at the end of command unzip the results
     // execute unzipping operation if need to unzip is true
-   
-    // TODO: change send command to write command
-    // Send input by user to server
-    send(skt_fd, copyOfUserInput, strlen(copyOfUserInput), 0);
 
-  
+    // Send input by user to server
+    send_control_message(skt_fd, copyOfUserInput);
+
     // check the control message
     receive_control_message(skt_fd, buffer);
-    
-    
+
     // if thte control message is FIL the server will be sending a file
     if (strcmp(buffer, "FIL") == 0)
     {
-      
+
       int file_fd;
 
       // check if the command requires tar file as response
-      if (returnsTarFile)
+      if (returns_tar_file)
       {
         // create a new temp.tar.gz
         file_fd = open("temp.tar.gz", O_WRONLY | O_CREAT | O_TRUNC, 0777);
 
         printf("Receiving ....");
 
-        //receive file from server
+        // receive file from server
         receive_file(file_fd, skt_fd);
 
         printf("File received\n");
 
-        //close file desc
+        // close file desc
         close(file_fd);
 
         // if there is -u option
         // unzip the file
-        if (needToUnzip){
+        if (needToUnzip)
+        {
           printf("Unzipping file...\n");
-          //call the function
+          // call the function
           unzipFile("temp.tar.gz");
         }
-      }else{
-        //handle error
+      }
+      else
+      {
+        // handle error
         printf("Some error occured, Server is trying to send a file but this command doesnot accepts file as a response.\n");
       }
     }
@@ -503,20 +514,20 @@ int main(int argc, char const *argv[])
     }
 
     // if the server is returning message in case of  FILESRCH
-    else if(strcmp(buffer,"MSG")==0)
-    { 
-      //recceive message
+    else if (strcmp(buffer, "MSG") == 0)
+    {
+      // recceive message
       receive_message(skt_fd, resp);
-
     }
-    
+
     // if there is quit signal dfrom server
-    else if(strcmp(buffer,"QIT")==0){
-      //close socket fd
+    else if (strcmp(buffer, "QIT") == 0)
+    {
+      // close socket fd
       close(skt_fd);
       printf("Connection is closed.\n");
       // exit this process.
-      exit(EXIT_SUCCESS);    
+      exit(EXIT_SUCCESS);
     }
   }
 
