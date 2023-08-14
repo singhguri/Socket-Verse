@@ -8,11 +8,13 @@
 #include <limits.h>
 #include <fcntl.h>
 
+//constatns
 #define PORT 8080
-#define mirror_port 7001
+#define MIRROR_PORT 7001
 #define BUFSIZE 1024
 #define MAX_LENGTH_OF_COMMAND 10000
 
+// flags
 bool needToUnzip = false;
 bool returns_tar_file = false;
 
@@ -22,8 +24,11 @@ void send_control_message(int skt_fd, char *msg)
   write(skt_fd, msg, strlen(msg));
 }
 
+
+// this function responsible for receiveing file
 void receive_file(int file_fd, int socket)
 {
+  //check error
   if (file_fd < 0)
   {
     perror("Error creating file\n");
@@ -46,9 +51,10 @@ void receive_file(int file_fd, int socket)
       break;
   }
 
-  printf("done\n");
+  printf("Done\n");
 }
 
+// function receives message
 void receive_message(int socket, char *buffer)
 {
 
@@ -59,14 +65,15 @@ void receive_message(int socket, char *buffer)
   }
 }
 
+// function reveives control message
 void receive_control_message(int socket, char *buffer)
 {
   // FIL, MIR, ERR, CTM, CTS, QIT
   ssize_t bytesReceived = read(socket, buffer, 3);
-  if (bytesReceived > 0)
-  {
-    printf("Control from server: %s\n", buffer);
-  }
+  // if (bytesReceived > 0)
+  // {
+  //   printf("Control from server: %s\n", buffer);
+  // }
 }
 
 // unzip the file
@@ -243,8 +250,10 @@ bool validate_the_command(char *command)
 
     // where the command is tarfgetz
     // tarfgetz size1 size2 <-u> so max no. of tokens is 4
-    if (size < 3)
+    if (size < 3){
+      printf("Wrong input: Allowed input format is tarfgetz size1 size2 <-u>\n");
       return false;
+    }
     int n1 = is_valid_digits_range(command_with_args[1]);
     int n2 = is_valid_digits_range(command_with_args[2]);
     // if it has -u option
@@ -404,7 +413,7 @@ int main(int argc, char const *argv[])
 
     memset(&mirror_addr, '\0', sizeof(mirror_addr));
     mirror_addr.sin_family = AF_INET;
-    mirror_addr.sin_port = htons(mirror_port);
+    mirror_addr.sin_port = htons(MIRROR_PORT);
     mirror_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
     // Connect to the mirror server
@@ -416,6 +425,7 @@ int main(int argc, char const *argv[])
 
     // check the control message exepectting CTM now
     receive_control_message(skt_fd, buffer);
+
   }
 
   // if control message iis CTM
@@ -435,7 +445,7 @@ int main(int argc, char const *argv[])
   while (1)
   {
 
-    printf("Enter a command\n-filesrch <filename>\n-fgets <file1> <file2> <file3> <file4>\n-tarfgetz <size1> <size2> <-u>\n-getdirf <date1> <date2> <-u>\n-targzf <ext1> <ext2> <ext3> <ext4> <-u>\n-quit\n");
+    printf("\nEnter a command\n-filesrch <filename>\n-fgets <file1> <file2> <file3> <file4>\n-tarfgetz <size1> <size2> <-u>\n-getdirf <date1> <date2> <-u>\n-targzf <ext1> <ext2> <ext3> <ext4> <-u>\n-quit\n");
 
     // flags
     needToUnzip = false;
@@ -446,7 +456,7 @@ int main(int argc, char const *argv[])
 
     // replaces the \n with NULL character in user input
     inputByUser[strcspn(inputByUser, "\n")] = '\0';
-
+    
     // creating a copy of inputByUser
     strncpy(copyOfUserInput, inputByUser, MAX_LENGTH_OF_COMMAND);
 
@@ -458,10 +468,12 @@ int main(int argc, char const *argv[])
       continue;
 
     /// else the commandValidation is true good to go
+    
 
-    // check if it has -u at the end of command unzip the results
-    // execute unzipping operation if need to unzip is true
+    memset(resp, 0, sizeof(resp));
+    memset(buffer, 0, sizeof(buffer));
 
+    fflush(stdout);
     // Send input by user to server
     send_control_message(skt_fd, copyOfUserInput);
 
@@ -480,7 +492,7 @@ int main(int argc, char const *argv[])
         // create a new temp.tar.gz
         file_fd = open("temp.tar.gz", O_WRONLY | O_CREAT | O_TRUNC, 0777);
 
-        printf("Receiving ....");
+        printf("Receiving ....\n");
 
         // receive file from server
         receive_file(file_fd, skt_fd);

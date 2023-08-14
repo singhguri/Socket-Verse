@@ -13,10 +13,12 @@
 #include <stdbool.h>
 #include <limits.h>
 
+//cponstants
 #define PORT 7001
 #define _XOPEN_SOURCE 500
 #define BUFSIZE 1024
 
+// root dir
 char *rootDirectory = "$HOME";
 
 struct
@@ -54,7 +56,6 @@ bool sendFileToClient(char *file, int socket_fd)
     return false;
   }
 
-  printf("sendoing");
   char buffer[BUFSIZE];
   ssize_t bytesRead;
 
@@ -85,7 +86,7 @@ void file_search(char *base_path, char *filename)
   char command_buf[BUFSIZE];
 
   // Searching for file in the root directory
-  sprintf(command_buf, "find %s -type f -wholename $(find %s -type f -name %s | awk -F/ '{ print NF-1, $0 }' | sort -n | awk '{$1=\"\"; print $0}'|head -1) -printf \"%%s,%%Tc\n\"", base_path, base_path, filename);
+  sprintf(command_buf, "find %s -type f -wholename $(find %s -type f -name %s | awk -F/ '{ print NF-1, $0 }' | sort -n | awk '{$1=\"\"; print $0}'|head -1) -printf \"%%s,%%Tc\n\" 2>/dev/null", base_path, base_path, filename);
 
   FILE *fp = popen(command_buf, "r");
   char line[BUFSIZE];
@@ -144,7 +145,6 @@ bool get_files_matching_size(char *base_path, int size1, int size2)
           base_path, size1, size2);
   int status = system(command_buf);
 
-  printf("status: %d\n", status);
 
   return status == 0 ? true : false;
 }
@@ -209,7 +209,8 @@ void processclient(int skt_fd)
     cmd[sizeOfInput] = '\0';
 
     // print thte command 
-    printf("Executing: %s\n", cmd);
+    if(sizeOfInput > 0)
+      printf("Executing: %s\n", cmd);
 
     // Parse command by tokenizing
     char *token = strtok(cmd, " ");
@@ -247,14 +248,6 @@ void processclient(int skt_fd)
           // send file
           bool isSent = sendFileToClient("temp.tar.gz", skt_fd);
 
-          // TODO: check how to send message after this
-          //  if(isSent){
-          //  	//sending control message
-          //  	sendControlMessage(skt_fd, "File Sent");
-          // }else{
-          // 	//sending control message
-          // 	sendControlMessage(skt_fd, "File Sending Failed");
-          // }
         }
         else
         {
@@ -311,12 +304,11 @@ void processclient(int skt_fd)
         // send file
         bool isSent = sendFileToClient("temp.tar.gz", skt_fd);
 
-        // TODO: check if success in sending file or not
       }
       else
       {
         sendControlMessage(skt_fd, "ERR");
-        sendMessage(skt_fd, "Error: Some Error Occured, possibly no files found.\n");
+        sendMessage(skt_fd, "Error: No files found.\n");
       }
     }
     else if (strcmp(token, "getdirf") == 0)
@@ -324,7 +316,6 @@ void processclient(int skt_fd)
       char *date1_str = strtok(NULL, " ");
       char *date2_str = strtok(NULL, " ");
 
-      // TODO: Handle invalid syntax in client
 
       // get files matching date range
       bool status = get_files_matching_date(rootDirectory, date1_str, date2_str);
@@ -339,12 +330,11 @@ void processclient(int skt_fd)
         // send file
         bool isSent = sendFileToClient("temp.tar.gz", skt_fd);
 
-        // TODO: check if success in sending file or not
       }
       else
       {
         sendControlMessage(skt_fd, "ERR");
-        sendMessage(skt_fd, "Error: Some Error Occured, possibly no files found.\n");
+        sendMessage(skt_fd, "Error: No files found.\n");
       }
     }
     else if (strcmp(token, "targzf") == 0)
@@ -354,7 +344,6 @@ void processclient(int skt_fd)
       char *ext3 = strtok(NULL, " ");
       char *ext4 = strtok(NULL, " ");
 
-      // TODO: Handle invalid syntax in client
 
       // check if any of the specified files are present
       bool status = get_files_matching_ext(rootDirectory, ext1, ext2, ext3, ext4);
@@ -369,12 +358,11 @@ void processclient(int skt_fd)
         // send file
         bool isSent = sendFileToClient("temp.tar.gz", skt_fd);
 
-        // TODO: check if success in sending file or not
       }
       else
       {
         sendControlMessage(skt_fd, "ERR");
-        sendMessage(skt_fd, "Error: Some Error Occured, possibly no files found.\n");
+        sendMessage(skt_fd, "Error: No files found.\n");
       }
     }
     else if (strcmp(token, "quit") == 0)
@@ -409,6 +397,7 @@ int main(int argc, char const *argv[])
   // Create socket file descriptor
   if ((srv_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
   {
+    //error
     perror("socket failed");
     exit(EXIT_FAILURE);
   }
@@ -416,6 +405,7 @@ int main(int argc, char const *argv[])
   // Attach socket to the port 8080
   if (setsockopt(srv_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)) < 0)
   {
+    //handle error
     perror("setsockopt");
     exit(EXIT_FAILURE);
   }
@@ -444,13 +434,14 @@ int main(int argc, char const *argv[])
   {
     if ((new_skt = accept(srv_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
     {
-      perror("accept");
+      //error
+      perror("Error in accept");
       exit(EXIT_FAILURE);
     }
     
     // sedn control message to client "CTM(Connected to mirror)"
 		sendControlMessage(new_skt,"CTM");
-    printf("The New client is connected. Forking child process...\n");
+    printf("The New client is connected.\n");
 
     pid_t pid = fork();
     if (pid == 0)
